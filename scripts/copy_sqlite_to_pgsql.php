@@ -7,11 +7,12 @@ require __DIR__.'/../vendor/autoload.php';
 $basePath = dirname(__DIR__);
 $sqlitePath = $basePath.DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'database.sqlite';
 $pgConfig = [
-    'host' => '127.0.0.1',
-    'port' => '5432',
-    'database' => 'laravel',
-    'username' => 'postgres',
-    'password' => '123',
+    'host' => getenv('TARGET_DB_HOST') ?: '127.0.0.1',
+    'port' => getenv('TARGET_DB_PORT') ?: '5432',
+    'database' => getenv('TARGET_DB_DATABASE') ?: 'laravel',
+    'username' => getenv('TARGET_DB_USERNAME') ?: 'postgres',
+    'password' => getenv('TARGET_DB_PASSWORD') ?: '123',
+    'sslmode' => getenv('TARGET_DB_SSLMODE') ?: 'prefer',
 ];
 
 if (! file_exists($sqlitePath)) {
@@ -25,10 +26,11 @@ $sqlite->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
 $pgsql = new PDO(
     sprintf(
-        'pgsql:host=%s;port=%s;dbname=%s',
+        'pgsql:host=%s;port=%s;dbname=%s;sslmode=%s',
         $pgConfig['host'],
         $pgConfig['port'],
-        $pgConfig['database']
+        $pgConfig['database'],
+        $pgConfig['sslmode']
     ),
     $pgConfig['username'],
     $pgConfig['password'],

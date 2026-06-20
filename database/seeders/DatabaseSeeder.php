@@ -35,6 +35,8 @@ class DatabaseSeeder extends Seeder
 
     private const REPORT_STATUSES = ['submitted', 'approved', 'rejected'];
 
+    private const OPERATIONAL_MONTHS = [1, 2, 3, 4, 5];
+
     private ?Collection $surabayaPathPoints = null;
 
     /**
@@ -228,11 +230,12 @@ class DatabaseSeeder extends Seeder
             $assetId = $assetIds[($i * 3) % count($assetIds)];
             $asset = Asset::find($assetId);
             $status = $statusCycle[($i - 1) % count($statusCycle)];
+            $month = $this->pickOperationalMonth($i);
             $reportedDay = (($i - 1) % 28) + 1;
             $reportedHour = 7 + ($i % 11);
-            $reportedAt = sprintf('2026-05-%02d %02d:%02d:00', $reportedDay, $reportedHour, ($i * 7) % 60);
+            $reportedAt = sprintf('2026-%02d-%02d %02d:%02d:00', $month, $reportedDay, $reportedHour, ($i * 7) % 60);
             $resolvedAt = in_array($status, ['resolved', 'closed'], true)
-                ? sprintf('2026-05-%02d %02d:%02d:00', min(28, $reportedDay + 1), min(23, $reportedHour + 4), ($i * 11) % 60)
+                ? sprintf('2026-%02d-%02d %02d:%02d:00', $month, min(28, $reportedDay + 1), min(23, $reportedHour + 4), ($i * 11) % 60)
                 : null;
 
             Disturbance::create([
@@ -264,6 +267,7 @@ class DatabaseSeeder extends Seeder
             $asset = Asset::find($assetId);
             $status = self::TASK_STATUSES[($i - 1) % count(self::TASK_STATUSES)];
             $assignedTo = $status === 'draft' ? null : $operatorIds[($i - 1) % count($operatorIds)];
+            $month = $this->pickOperationalMonth($i);
 
             PruningTask::create([
                 'task_code' => sprintf('PNG-2026-%03d', 100 + $i),
@@ -276,7 +280,7 @@ class DatabaseSeeder extends Seeder
                 'status' => $status,
                 'latitude' => $asset?->latitude,
                 'longitude' => $asset?->longitude,
-                'due_date' => sprintf('2026-07-%02d', (($i - 1) % 28) + 1),
+                'due_date' => sprintf('2026-%02d-%02d', $month, (($i - 1) % 28) + 1),
                 'created_by' => $creatorIds[($i - 1) % count($creatorIds)],
             ]);
         }
@@ -296,10 +300,11 @@ class DatabaseSeeder extends Seeder
             $assetId = $assetIds[($i * 6) % count($assetIds)];
             $asset = Asset::find($assetId);
             $status = self::REPORT_STATUSES[($i - 1) % count(self::REPORT_STATUSES)];
+            $month = $this->pickOperationalMonth($i);
             $submittedDay = (($i - 1) % 28) + 1;
-            $submittedAt = sprintf('2026-06-%02d %02d:%02d:00', $submittedDay, 8 + ($i % 9), ($i * 9) % 60);
+            $submittedAt = sprintf('2026-%02d-%02d %02d:%02d:00', $month, $submittedDay, 8 + ($i % 9), ($i * 9) % 60);
             $approvedAt = $status === 'approved'
-                ? sprintf('2026-06-%02d %02d:%02d:00', min(28, $submittedDay + 1), 13 + ($i % 5), ($i * 5) % 60)
+                ? sprintf('2026-%02d-%02d %02d:%02d:00', $month, min(28, $submittedDay + 1), 13 + ($i % 5), ($i * 5) % 60)
                 : null;
 
             FieldReport::create([
@@ -405,6 +410,11 @@ class DatabaseSeeder extends Seeder
             : collect([['lng' => 112.7348, 'lat' => -7.2313]]);
 
         return $this->surabayaPathPoints;
+    }
+
+    private function pickOperationalMonth(int $position): int
+    {
+        return self::OPERATIONAL_MONTHS[($position - 1) % count(self::OPERATIONAL_MONTHS)];
     }
 
     private function spreadSurabayaPoints(Collection $points): Collection
