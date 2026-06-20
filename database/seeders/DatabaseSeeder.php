@@ -170,11 +170,11 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        $this->seedExtraAssets(100);
-        $this->seedExtraDisturbances(100);
-        $this->seedExtraPruningTasks(100);
-        $this->seedExtraFieldReports(100);
-        $this->seedExtraActivityLogs(100);
+        $this->seedExtraAssets(200);
+        $this->seedExtraDisturbances(200);
+        $this->seedExtraPruningTasks(200);
+        $this->seedExtraFieldReports(200);
+        $this->seedExtraActivityLogs(200);
     }
 
     private function seedExtraAssets(int $count): void
