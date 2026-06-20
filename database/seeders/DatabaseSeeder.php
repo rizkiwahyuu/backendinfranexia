@@ -37,6 +37,12 @@ class DatabaseSeeder extends Seeder
 
     private const OPERATIONAL_MONTHS = [1, 2, 3, 4, 5];
 
+    private const DISTURBANCE_MONTH_PROFILE = [24, 30, 38, 46, 62];
+
+    private const TASK_MONTH_PROFILE = [20, 28, 36, 48, 68];
+
+    private const REPORT_MONTH_PROFILE = [18, 26, 34, 50, 72];
+
     private ?Collection $surabayaPathPoints = null;
 
     /**
@@ -221,29 +227,44 @@ class DatabaseSeeder extends Seeder
 
     private function seedExtraDisturbances(int $count): void
     {
-        $assetIds = Asset::query()->whereIn('region_id', [0, 1, 2, 3])->pluck('id')->all();
+        $assetsByRegion = $this->getAssetIdsByRegion();
         $operatorIds = [3, 4, 5, 6, 8, 9];
         $creatorIds = [1, 2, 10];
-        $statusCycle = ['open', 'on_progress', 'waiting_validation', 'resolved', 'closed'];
+        $statusSequence = ['open', 'open', 'on_progress', 'waiting_validation', 'resolved', 'closed', 'on_progress', 'resolved', 'open', 'closed'];
+        $regionSequence = [1, 0, 2, 1, 3, 0, 4, 2, 5, 1, 0, 3];
+        $typeSequence = ['cable_cut', 'high_loss', 'environment', 'odp_damage', 'high_loss', 'odc_issue', 'device_issue', 'environment', 'cable_cut', 'other'];
+        $severitySequence = [5, 4, 3, 3, 2, 4, 2, 3, 5, 1, 4, 2];
 
         for ($i = 1; $i <= $count; $i++) {
-            $assetId = $assetIds[($i * 3) % count($assetIds)];
+            $regionId = $regionSequence[($i - 1) % count($regionSequence)];
+            $assetPool = $assetsByRegion[$regionId] ?? [];
+            $assetId = $assetPool[($i * 3) % count($assetPool)];
             $asset = Asset::find($assetId);
-            $status = $statusCycle[($i - 1) % count($statusCycle)];
-            $month = $this->pickOperationalMonth($i);
+            $status = $statusSequence[($i - 1) % count($statusSequence)];
+            $month = $this->pickMonthFromProfile($i, self::DISTURBANCE_MONTH_PROFILE);
             $reportedDay = (($i - 1) % 28) + 1;
-            $reportedHour = 7 + ($i % 11);
+            $reportedHour = 7 + ($i % 10);
             $reportedAt = sprintf('2026-%02d-%02d %02d:%02d:00', $month, $reportedDay, $reportedHour, ($i * 7) % 60);
-            $resolvedAt = in_array($status, ['resolved', 'closed'], true)
-                ? sprintf('2026-%02d-%02d %02d:%02d:00', $month, min(28, $reportedDay + 1), min(23, $reportedHour + 4), ($i * 11) % 60)
-                : null;
+            $resolvedAt = null;
+
+            if (in_array($status, ['resolved', 'closed'], true)) {
+                $resolveMonth = $month;
+                $resolveDay = min(28, $reportedDay + (($i % 3) + 1));
+
+                if ($month < 6 && ($reportedDay >= 25 || $i % 9 === 0)) {
+                    $resolveMonth = min(6, $month + 1);
+                    $resolveDay = (($i * 2) % 5) + 1;
+                }
+
+                $resolvedAt = sprintf('2026-%02d-%02d %02d:%02d:00', $resolveMonth, $resolveDay, min(23, $reportedHour + 3), ($i * 11) % 60);
+            }
 
             Disturbance::create([
                 'disturbance_code' => sprintf('GGN-2026-%03d', 100 + $i),
                 'asset_id' => $assetId,
-                'region_id' => $asset?->region_id ?? (($i - 1) % count(self::REGIONS)),
-                'type' => self::DISTURBANCE_TYPES[($i - 1) % count(self::DISTURBANCE_TYPES)],
-                'severity' => (($i - 1) % 5) + 1,
+                'region_id' => $asset?->region_id ?? $regionId,
+                'type' => $typeSequence[($i - 1) % count($typeSequence)],
+                'severity' => $severitySequence[($i - 1) % count($severitySequence)],
                 'status' => $status,
                 'latitude' => $asset?->latitude,
                 'longitude' => $asset?->longitude,
@@ -258,25 +279,30 @@ class DatabaseSeeder extends Seeder
 
     private function seedExtraPruningTasks(int $count): void
     {
-        $assetIds = Asset::query()->whereIn('region_id', [0, 1, 2, 3])->pluck('id')->all();
+        $assetsByRegion = $this->getAssetIdsByRegion();
         $operatorIds = [3, 4, 5, 6, 8, 9];
         $creatorIds = [1, 2, 10];
+        $regionSequence = [1, 0, 2, 1, 3, 4, 0, 2, 5, 1, 0, 3];
+        $statusSequence = ['assigned', 'on_progress', 'assigned', 'waiting_validation', 'completed', 'draft', 'assigned', 'on_progress', 'rejected', 'completed'];
+        $prioritySequence = ['critical', 'high', 'medium', 'high', 'low', 'medium', 'critical', 'medium', 'high', 'low'];
 
         for ($i = 1; $i <= $count; $i++) {
-            $assetId = $assetIds[($i * 5) % count($assetIds)];
+            $regionId = $regionSequence[($i - 1) % count($regionSequence)];
+            $assetPool = $assetsByRegion[$regionId] ?? [];
+            $assetId = $assetPool[($i * 5) % count($assetPool)];
             $asset = Asset::find($assetId);
-            $status = self::TASK_STATUSES[($i - 1) % count(self::TASK_STATUSES)];
+            $status = $statusSequence[($i - 1) % count($statusSequence)];
             $assignedTo = $status === 'draft' ? null : $operatorIds[($i - 1) % count($operatorIds)];
-            $month = $this->pickOperationalMonth($i);
+            $month = $this->pickMonthFromProfile($i, self::TASK_MONTH_PROFILE);
 
             PruningTask::create([
                 'task_code' => sprintf('PNG-2026-%03d', 100 + $i),
                 'asset_id' => $assetId,
-                'region_id' => $asset?->region_id ?? (($i - 1) % count(self::REGIONS)),
+                'region_id' => $asset?->region_id ?? $regionId,
                 'assigned_to' => $assignedTo,
                 'title' => sprintf('Pemangkasan preventif koridor %03d', 100 + $i),
                 'description' => sprintf('Pembersihan vegetasi dan inspeksi jalur di sekitar %s.', $asset?->asset_code ?? 'aset terkait'),
-                'priority' => self::TASK_PRIORITIES[($i - 1) % count(self::TASK_PRIORITIES)],
+                'priority' => $prioritySequence[($i - 1) % count($prioritySequence)],
                 'status' => $status,
                 'latitude' => $asset?->latitude,
                 'longitude' => $asset?->longitude,
@@ -288,24 +314,38 @@ class DatabaseSeeder extends Seeder
 
     private function seedExtraFieldReports(int $count): void
     {
-        $taskIds = PruningTask::query()->whereIn('region_id', [0, 1, 2, 3])->pluck('id')->all();
-        $disturbanceIds = Disturbance::query()->whereIn('region_id', [0, 1, 2, 3])->pluck('id')->all();
-        $assetIds = Asset::query()->whereIn('region_id', [0, 1, 2, 3])->pluck('id')->all();
+        $taskIds = PruningTask::query()->pluck('id')->all();
+        $disturbanceIds = Disturbance::query()->pluck('id')->all();
+        $assetsByRegion = $this->getAssetIdsByRegion();
         $operatorIds = [3, 4, 5, 6, 8, 9];
+        $regionSequence = [1, 0, 2, 1, 3, 4, 0, 2, 5, 1, 0, 3];
+        $statusSequence = ['approved', 'submitted', 'approved', 'submitted', 'rejected', 'approved', 'submitted', 'approved', 'submitted', 'rejected'];
 
         for ($i = 1; $i <= $count; $i++) {
-            $isPruning = $i % 2 === 0;
+            $isPruning = $i % 3 !== 1;
             $taskId = $isPruning ? $taskIds[($i * 7) % count($taskIds)] : null;
             $disturbanceId = $isPruning ? null : $disturbanceIds[($i * 4) % count($disturbanceIds)];
-            $assetId = $assetIds[($i * 6) % count($assetIds)];
+            $regionId = $regionSequence[($i - 1) % count($regionSequence)];
+            $assetPool = $assetsByRegion[$regionId] ?? [];
+            $assetId = $assetPool[($i * 6) % count($assetPool)];
             $asset = Asset::find($assetId);
-            $status = self::REPORT_STATUSES[($i - 1) % count(self::REPORT_STATUSES)];
-            $month = $this->pickOperationalMonth($i);
+            $status = $statusSequence[($i - 1) % count($statusSequence)];
+            $month = $this->pickMonthFromProfile($i, self::REPORT_MONTH_PROFILE);
             $submittedDay = (($i - 1) % 28) + 1;
             $submittedAt = sprintf('2026-%02d-%02d %02d:%02d:00', $month, $submittedDay, 8 + ($i % 9), ($i * 9) % 60);
-            $approvedAt = $status === 'approved'
-                ? sprintf('2026-%02d-%02d %02d:%02d:00', $month, min(28, $submittedDay + 1), 13 + ($i % 5), ($i * 5) % 60)
-                : null;
+            $approvedAt = null;
+
+            if ($status === 'approved') {
+                $approvedMonth = $month;
+                $approvedDay = min(28, $submittedDay + (($i % 2) + 1));
+
+                if ($submittedDay >= 26 && $month < 6) {
+                    $approvedMonth = $month + 1;
+                    $approvedDay = (($i * 3) % 4) + 1;
+                }
+
+                $approvedAt = sprintf('2026-%02d-%02d %02d:%02d:00', $approvedMonth, $approvedDay, 13 + ($i % 5), ($i * 5) % 60);
+            }
 
             FieldReport::create([
                 'report_code' => sprintf('LPR-2026-%03d', 100 + $i),
@@ -415,6 +455,31 @@ class DatabaseSeeder extends Seeder
     private function pickOperationalMonth(int $position): int
     {
         return self::OPERATIONAL_MONTHS[($position - 1) % count(self::OPERATIONAL_MONTHS)];
+    }
+
+    private function pickMonthFromProfile(int $position, array $profile): int
+    {
+        $cursor = 0;
+
+        foreach ($profile as $index => $limit) {
+            $cursor += $limit;
+
+            if ($position <= $cursor) {
+                return self::OPERATIONAL_MONTHS[$index];
+            }
+        }
+
+        return self::OPERATIONAL_MONTHS[array_key_last(self::OPERATIONAL_MONTHS)];
+    }
+
+    private function getAssetIdsByRegion(): array
+    {
+        return Asset::query()
+            ->orderBy('id')
+            ->get(['id', 'region_id'])
+            ->groupBy('region_id')
+            ->map(fn (Collection $items) => $items->pluck('id')->values()->all())
+            ->all();
     }
 
     private function spreadSurabayaPoints(Collection $points): Collection
