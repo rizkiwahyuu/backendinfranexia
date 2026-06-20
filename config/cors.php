@@ -15,7 +15,7 @@ return [
         'http://127.0.0.1:3001',
     ])),
     'allowed_origins_patterns' => [
-        '^https://.*\.vercel\.app$',
+        '/^https:\/\/.*\.vercel\.app$/',
     ],
     'allowed_headers' => ['*'],
     'exposed_headers' => [],
